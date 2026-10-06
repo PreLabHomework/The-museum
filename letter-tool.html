@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Letter tool</title>
+<style>body{font-family:Georgia,serif;max-width:760px;margin:30px auto;padding:0 16px;color:#1a0d18;background:#f4eadf}
+textarea,input{width:100%;box-sizing:border-box;font:16px Georgia,serif;padding:10px;border:2px solid #1a0d18;margin:6px 0 14px;background:#fff}
+textarea{min-height:240px}button{font:15px Georgia,serif;padding:10px 16px;border:2px solid #1a0d18;background:#b3172d;color:#fff;cursor:pointer}
+code{background:#fff;padding:2px 5px}#out{min-height:110px;font:12px monospace}.n{color:#6b4a5f;font-size:14px;line-height:1.5}</style></head>
+<body>
+<h1>Letter tool</h1>
+<p class="n">Type or paste the letter, enter the safe code, click Encrypt, then paste the result into <code>finalEnc</code> inside <code>SITE</code> in index.html (replace the old long string). Leave a blank line between paragraphs. Everything happens in your browser. Nothing is uploaded.</p>
+<label>Letter</label><textarea id="t"></textarea>
+<label>Safe code (the digits she enters in the safe)</label><input id="c" value="260106" inputmode="numeric">
+<button id="go">Encrypt</button>
+<label style="display:block;margin-top:18px">Result: paste this as the finalEnc value</label><textarea id="out" readonly></textarea>
+<script>
+document.getElementById('go').onclick=async()=>{
+  const text=document.getElementById('t').value.trim(),code=document.getElementById('c').value.trim(),out=document.getElementById('out');
+  if(!text||!code){out.value='Enter both the letter and the code.';return;}
+  try{
+    const enc=new TextEncoder(),salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+    const km=await crypto.subtle.importKey('raw',enc.encode(code),'PBKDF2',false,['deriveKey']);
+    const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:200000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt']);
+    const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,enc.encode(text)));
+    const all=new Uint8Array(16+12+ct.length);all.set(salt,0);all.set(iv,16);all.set(ct,28);
+    let b='';all.forEach(x=>b+=String.fromCharCode(x));out.value=btoa(b);
+  }catch(e){out.value='Encryption failed: '+e.message+' (open this page over https or from a local file in Chrome).';}
+};
+</script></body></html>
