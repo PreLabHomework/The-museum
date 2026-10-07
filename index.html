@@ -1318,6 +1318,8 @@ function roomScene(id){
   // ---- background ----
   const t0=floorTile(r.floor,r.pal[0],r.pal[1],0),t1=floorTile(r.floor,r.pal[0],r.pal[1],1);
   g=bg.getContext('2d');
+  for(let gy=0;gy<GY;gy++)for(let gx=0;gx<GX;gx++)if(!ids.some(k=>cells[k][0]===gx&&cells[k][1]===gy)){   // an L-shaped wing's empty corner reads as solid wall, not a hole
+    const X=gx*384,Y=gy*256,wc=shade(r.pal[3],-.45),wl=shade(wc,-.2);F(wc,X,Y,384,256);for(let y=0;y<256;y+=8){F(wl,X,Y+y,384,1);for(let x=(y/8)%2?0:16;x<384;x+=32)F(wl,X+x,Y+y,1,8);}}
   for(const k of ids){const [ox,oy]=cellOff(r,k);for(let y=3;y<16;y++)for(let x=0;x<24;x++)g.drawImage((ox+x+oy+y)%2?t1:t0,(ox+x)*16,(oy+y)*16);
     const X=ox*16,Y=oy*16;let gr=g.createLinearGradient(0,Y+48,0,Y+86);gr.addColorStop(0,'rgba(8,4,16,.32)');gr.addColorStop(1,'rgba(8,4,16,0)');g.fillStyle=gr;g.fillRect(X,Y+48,384,38);
     const gl=g.createLinearGradient(X,0,X+34,0);gl.addColorStop(0,'rgba(8,4,16,.26)');gl.addColorStop(1,'rgba(8,4,16,0)');g.fillStyle=gl;g.fillRect(X,Y+48,34,208);
@@ -2204,10 +2206,10 @@ let Z=3,VW=480,VH=270;
 let vigC=null;
 function mkVig(){vigC=mk(VW,VH);const vg=vigC.getContext('2d'),gr=vg.createRadialGradient(VW/2,VH/2,Math.min(VW,VH)*.35,VW/2,VH/2,Math.max(VW,VH)*.78);gr.addColorStop(0,'rgba(10,6,24,0)');gr.addColorStop(1,'rgba(10,6,24,.38)');vg.fillStyle=gr;vg.fillRect(0,0,VW,VH);}
 function resize(){const w=innerWidth,h=innerHeight;Z=Math.max(2,Math.round(Math.min(w/400,h/300)));if(typeof SCN!=='undefined'&&SCN&&!SCN.outdoor){ // fill the room
-    Z=Math.max(Z+1,Math.ceil(w/384),Math.ceil(h/256));/* sized to one 24x16 cell, so the view never spills past it */}VW=Math.ceil(w/Z);VH=Math.ceil(h/Z);cv.width=VW;cv.height=VH;lightC.width=VW;lightC.height=VH;mkVig();}
+    Z=Math.max(2,Math.floor(Math.min(w/384,h/256)));/* zoomed out until a whole 24x16 room section fits, so you can see the room you are in */}VW=Math.ceil(w/Z);VH=Math.ceil(h/Z);cv.width=VW;cv.height=VH;lightC.width=VW;lightC.height=VH;mkVig();}
 addEventListener('resize',resize);
-/* Indoors the camera stays inside the cell you are standing in (plus any cell joined to it by an
-   open wall), so an L-shaped wing never shows its empty corner. Walking into the next cell pans over. */
+/* Indoors the camera frames the room section you are standing in (plus any section joined to it by an open wall),
+   without looking past the building's outer walls. Walking into the next section pans over. */
 const CAM={id:null,cell:null,x:0,y:0,fx:0,fy:0,t:1};
 function camRegion(sc,c){const r=ROOMS[sc.id],L=r.layout,[ox,oy]=cellOff(r,c);let x0=ox,y0=oy,x1=ox+24,y1=oy+16;
   if(L)for(const l of L.links)if(l[2]&&l[2].open&&(l[0]===c||l[1]===c)){const [px,py]=cellOff(r,l[0]===c?l[1]:l[0]);x0=Math.min(x0,px);y0=Math.min(y0,py);x1=Math.max(x1,px+24);y1=Math.max(y1,py+16);}
@@ -2215,7 +2217,9 @@ function camRegion(sc,c){const r=ROOMS[sc.id],L=r.layout,[ox,oy]=cellOff(r,c);le
 const clampC=(v,a,b,span)=>b-a<=span?a-(span-(b-a))/2:Math.max(a,Math.min(b-span,v));
 function camera(sc){const cx=P.px+8-VW/2,cy=P.py+8-VH/2;
   if(sc.outdoor||!sc.cellAt)return [clampC(cx,0,sc.w*16,VW),clampC(cy,0,sc.h*16,VH)];
-  const c=sc.cellAt(P.tx,P.ty)||CAM.cell||'A',R=camRegion(sc,c),tx=clampC(cx,R[0],R[2],VW),ty=clampC(cy,R[1],R[3],VH);
+  const c=sc.cellAt(P.tx,P.ty)||CAM.cell||'A',R=camRegion(sc,c),
+    ix=R[2]-R[0]<=VW?(R[0]+R[2]-VW)/2:clampC(cx,R[0],R[2],VW),iy=R[3]-R[1]<=VH?(R[1]+R[3]-VH)/2:clampC(cy,R[1],R[3],VH),   // frame the section you are in
+    tx=clampC(ix,0,sc.w*16,VW),ty=clampC(iy,0,sc.h*16,VH);   // but never look past the building's outer walls
   if(CAM.id!==sc.id){CAM.id=sc.id;CAM.cell=c;CAM.t=1;}
   else if(c!==CAM.cell){CAM.fx=CAM.x;CAM.fy=CAM.y;CAM.cell=c;CAM.t=0;}
   let x=tx,y=ty;if(CAM.t<1){CAM.t=Math.min(1,CAM.t+_dt/.35);const e=CAM.t*CAM.t*(3-2*CAM.t);x=CAM.fx+(tx-CAM.fx)*e;y=CAM.fy+(ty-CAM.fy)*e;}
