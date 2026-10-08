@@ -1490,7 +1490,7 @@ function stepEnt(e,dt,speed){if(!e.mv)return false;e.mv.t+=dt/speed;e.wt+=dt;con
 
 /* ==================== INPUT ==================== */
 function cyrb(str){let h1=0xdeadbeef,h2=0x41c6ce57;for(let i=0,ch;i<str.length;i++){ch=str.charCodeAt(i);h1=Math.imul(h1^ch,2654435761);h2=Math.imul(h2^ch,1597334677);}h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);return 4294967296*(2097151&h2)+(h1>>>0);}
-const UNL='tuana-museum-unlock',SEAL_KEY='tuana-museum-key';let unlockedFlag=false,unsealed=false;
+const UNL='tuana-museum-unlock',SEAL_KEY='tuana-museum-key',SEAL_WORD='tuana-museum-word';let unlockedFlag=false,unsealed=false;
 /* The password opens the sealed rooms: it unlocks a random key, which then decrypts the content. The key is kept
    on this device so she only types the password once. An unlock remembered without a key asks for the password again. */
 try{unlockedFlag=localStorage.getItem(UNL)==='ok'&&(!SEAL||!!localStorage.getItem(SEAL_KEY));}catch(e){}
@@ -1504,8 +1504,12 @@ async function openSeal(raw){const k=await crypto.subtle.importKey('raw',raw,'AE
 async function unsealWord(w){if(!SEAL||!window.crypto||!crypto.subtle)return false;const enc=new TextEncoder();
   for(const e of SEAL.keys){try{const km=await crypto.subtle.importKey('raw',enc.encode(w),'PBKDF2',false,['deriveKey']);
     const wk=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64d(e.s),iterations:200000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
-    const raw=new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:b64d(e.i)},wk,b64d(e.c)));try{localStorage.setItem(SEAL_KEY,b64e(raw));}catch(x){}await openSeal(raw);return true;}catch(x){}}return false;}
-async function unsealStored(){if(!SEAL||!window.crypto||!crypto.subtle)return false;try{const k=localStorage.getItem(SEAL_KEY);if(k){await openSeal(b64d(k));return true;}}catch(e){}return false;}
+    const raw=new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:b64d(e.i)},wk,b64d(e.c)));try{localStorage.setItem(SEAL_KEY,b64e(raw));localStorage.setItem(SEAL_WORD,w);}catch(x){}await openSeal(raw);return true;}catch(x){}}return false;}
+/* The saved key goes stale whenever the rooms are resealed, so fall back to the saved word, and if that is gone too,
+   forget the unlock and ask for the password again instead of leaving everything sealed with no way in. */
+async function unsealStored(){if(!SEAL||!window.crypto||!crypto.subtle)return false;let k=null,w=null;try{k=localStorage.getItem(SEAL_KEY);w=localStorage.getItem(SEAL_WORD);}catch(e){}
+  if(k){try{await openSeal(b64d(k));return true;}catch(e){}}if(w&&await unsealWord(w))return true;
+  if(unlockedFlag&&!DEV){unlockedFlag=false;try{localStorage.removeItem(UNL);localStorage.removeItem(SEAL_KEY);}catch(e){}const r=$('#pwrow');if(r){r.style.display='';window._termSubmit=()=>$('#start').click();setTimeout(()=>{const p=$('#pw');if(p)p.focus();},300);}}return false;}
 const keys={};
 const KM={ArrowUp:'up',w:'up',W:'up',ArrowDown:'down',s:'down',S:'down',ArrowLeft:'left',a:'left',A:'left',ArrowRight:'right',d:'right',D:'right'};
 addEventListener('keydown',e=>{if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')){if(e.key==='Enter'&&e.target.tagName==='INPUT'&&window._termSubmit)window._termSubmit();return;}
